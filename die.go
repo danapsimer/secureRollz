@@ -11,6 +11,10 @@ type dieRoll struct {
 	value RollValue
 }
 
+func (dr dieRoll) String() string {
+	return fmt.Sprintf("%s{%d}",dr.Source().String(), dr.value)
+}
+
 func (dr dieRoll) Results() []Roll {
 	return []Roll{}
 }

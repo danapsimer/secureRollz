@@ -1,15 +1,16 @@
 package secureRollz_test
 
 import (
+	"github.com/danapsimer/secureRollz"
+	"github.com/danapsimer/secureRollz/rolltest"
 	"github.com/stretchr/testify/assert"
-	"secureRollz"
 	"testing"
 )
 
 func TestMultiRoller(t *testing.T) {
 	baseRoller := secureRollz.DieRoller(6)
 	roller := secureRollz.MultiRoller(10, baseRoller)
-	population := testRoller(t, roller, 10, 10, 60, "10d6")
+	population := rolltest.RollerTest(t, roller, 10, 10, 60, "10d6")
 	mean, err := population.Mean()
 	if (assert.NoError(t, err)) {
 		assert.InDelta(t, 35, mean, 1.0)
@@ -22,5 +23,5 @@ func TestMultiRoller(t *testing.T) {
 
 func BenchmarkMultiRoller(b *testing.B) {
 	roller := secureRollz.MultiRoller(10,secureRollz.DieRoller(6))
-	rollerBenchmark(b, roller)
+	rolltest.RollerBenchmark(b, roller)
 }

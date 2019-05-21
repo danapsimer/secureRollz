@@ -1,0 +1,234 @@
+{
+    package parse
+
+    import (
+        "github.com/danapsimer/secureRollz"
+    )
+
+    type term struct {
+        op    secureRollz.BinaryOp
+        right secureRollz.Roller
+    }
+
+    func (c *current) Errorf(format string, args... interface{}) error {
+        return errors.New(fmt.Sprintf("%s: %s",c.pos.String(),fmt.Sprintf(format,args...)))
+    }
+
+}
+
+Input <- _ roll:Roll _ EOF {
+    return roll, nil
+}
+
+Roll <- roll:Sum {
+    return roll, nil
+}
+
+Sum <- left:Product _ r:SumTerm* {
+    if r != nil {
+        roller, ok := left.(secureRollz.Roller)
+        if !ok {
+            return nil, c.Errorf("left is not a Roller")
+        }
+        for _, trm := range r.([]interface{}) {
+            term, ok := trm.(term)
+            if !ok {
+                return nil, c.Errorf("found element that is not a term")
+            }
+            roller = secureRollz.BinaryOpRoller(term.op, roller, term.right)
+        }
+        return roller, nil
+    }
+    return left, nil
+}
+
+SumTerm <- op:SumOp _ right:Product {
+    bop, ok := op.(secureRollz.BinaryOp)
+    if !ok {
+        return nil, c.Errorf("op is not a BinaryOp")
+    }
+    r, ok := right.(secureRollz.Roller)
+    if !ok {
+        return nil, c.Errorf("right is not a Roller")
+    }
+    return term{bop, r}, nil
+}
+
+SumOp <- op:('+' / '-') {
+    opb, ok := op.([]byte)
+    if !ok {
+        return nil, c.Errorf("op is not a []byte")
+    }
+    switch opb[0] {
+    case '+':
+        return secureRollz.Add, nil
+    case '-':
+        return secureRollz.Subtract, nil
+    }
+    return nil, c.Errorf("unknown sum operator: %s", string(opb))
+}
+
+Product <- left:Factor _ r:ProductTerm* {
+    if r != nil {
+        roller, ok := left.(secureRollz.Roller)
+        if !ok {
+            return nil, c.Errorf("left is not a Roller")
+        }
+        for _, trm := range r.([]interface{}) {
+            term, ok := trm.(term)
+            if !ok {
+                return nil, c.Errorf("element of r is not a term")
+            }
+            roller = secureRollz.BinaryOpRoller(term.op, roller, term.right)
+        }
+        return roller, nil
+    }
+    return left, nil
+}
+
+ProductTerm <- op:MulOp _ right:Factor {
+    bop, ok := op.(secureRollz.BinaryOp)
+    if !ok {
+        return nil, c.Errorf("op is not a secureRollz.BinaryOp")
+    }
+    r, ok := right.(secureRollz.Roller)
+    if !ok {
+        return nil, c.Errorf("right is not a secureRollz.Roller")
+    }
+    return term{bop,r}, nil
+}
+
+MulOp <- op:('*' / '/') {
+    opb, ok := op.([]byte)
+    if !ok {
+        return nil, c.Errorf("op is not a []byte")
+    }
+    switch opb[0] {
+    case '*':
+        return secureRollz.Multiply, nil
+    case '/':
+        return secureRollz.Divide, nil
+    }
+    return nil, c.Errorf("unknown mul operator: %s", string(opb))
+}
+
+Factor <- ReRoll / ReRollable
+
+ReRollable <- DiscardRoll / Discardable
+
+ReRoll <- roll:ReRollable _ 'r' _ reRollN:Number? _ dirOp:DirOp? _ value:Number _ {
+    rrn := 1
+    if reRollN != nil {
+        var ok bool
+        rrn, ok = reRollN.(int)
+        if !ok {
+            return nil, c.Errorf("reRollN is not a number")
+        }
+    }
+    lessThan := true
+    if dirOp != nil {
+        var ok bool
+        lessThan, ok = dirOp.(bool)
+        if !ok {
+            return nil, c.Errorf("dirOp is not a bool")
+        }
+    }
+    v, ok := value.(int)
+    if !ok {
+        return nil, c.Errorf("value is not a number")
+    }
+    r, ok := roll.(secureRollz.Roller)
+    if !ok {
+        return nil, c.Errorf("roll is not a Roller")
+    }
+    return secureRollz.ReRollRoller(rrn, secureRollz.RollValue(v), lessThan, r), nil
+}
+
+Discardable <- MultiRoll / Terminal
+
+DiscardRoll <- roll:Discardable _ 'D' _ dirOp:DirOp? _ n:Number _ {
+    lowest := true
+    if dirOp != nil {
+        var ok bool
+        lowest, ok = dirOp.(bool)
+        if !ok {
+            return nil, c.Errorf("dirOp is not a bool")
+        }
+    }
+    nn, ok := n.(int)
+    if !ok {
+        return nil, c.Errorf("n is not a number")
+    }
+    r, ok := roll.(secureRollz.Roller)
+    if !ok {
+        return nil, c.Errorf("roll is not a Roller")
+    }
+    return secureRollz.DiscardRoller(nn, lowest, r), nil
+}
+
+DirOp <- op:('<' / '>') {
+    opb, ok := op.([]byte)
+    if !ok {
+        return nil, c.Errorf("op is not a []byte")
+    }
+    switch opb[0] {
+    case '<':
+        return true, nil
+    case '>':
+        return false, nil
+    }
+    return nil, c.Errorf("unknown direction operator, %s", string(opb))
+}
+
+MultiRoll <- n:Number _ roll:Terminal {
+    nn, ok := n.(int)
+    if !ok {
+        return nil, c.Errorf("n is not a number")
+    }
+    r, ok := roll.(secureRollz.Roller)
+    if !ok {
+        return nil, c.Errorf("roll is not a Roller")
+    }
+    return secureRollz.MultiRoller(nn, r), nil
+}
+
+Terminal <- DieRoll / ConstRoll / ParenRoll
+
+ParenRoll <- '(' _ roll:Roll _ ')' {
+    roller, ok := roll.(secureRollz.Roller)
+    if !ok {
+        return nil, c.Errorf("roll is not a Roller")
+    }
+    return secureRollz.ParenRoller(roller), nil
+}
+
+DieRoll <- 'd' sides:Number _ {
+    s, ok := sides.(int)
+    if !ok {
+        return nil, c.Errorf("sides is not a number: %T", sides)
+    }
+    return secureRollz.DieRoller(s), nil
+}
+
+ConstRoll <- value:Number _ {
+    v, ok := value.(int)
+    if !ok {
+        return nil, c.Errorf("value is not a number: %T", value)
+    }
+    return secureRollz.Const(secureRollz.RollValue(v)), nil
+}
+
+Number <- ([0-9]+) {
+    ns := string(c.text)
+    n, err := strconv.Atoi(ns)
+    if err != nil {
+        return nil, c.Errorf("invalid number: %s - %s", ns, err.Error())
+    }
+    return n, nil
+}
+
+_ "whitespace" <- [ \n\t\r]*
+
+EOF <- !.
+
+

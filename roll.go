@@ -9,6 +9,8 @@ type Roll interface {
 	Results() []Roll
 	// The Total Result
 	Total() RollValue
+	// A representation of the roll and it's constituent results
+	String() string
 }
 
 type Roller interface {
@@ -16,12 +18,6 @@ type Roller interface {
 	String() string
 	// Roll the die
 	Roll() Roll
-}
-
-type RollerFunc func() Roll
-
-func (rf RollerFunc) Roll() Roll {
-	return rf()
 }
 
 type baseRoll struct {

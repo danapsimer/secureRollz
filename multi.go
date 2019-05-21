@@ -1,11 +1,33 @@
 package secureRollz
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 type multiRoll struct {
 	baseRoll
 	results []Roll
 	total   RollValue
+}
+
+func (mr multiRoll) String() string {
+	sw := bytes.NewBuffer(make([]byte,0,256))
+	sw.WriteString(mr.Source().String())
+	_, err := fmt.Fprintf(sw,"%s{total:%d,results:[", mr.Source().String(), mr.total)
+	if err != nil {
+		sw.WriteString("Error while creating string: ")
+		sw.WriteString(err.Error())
+		return sw.String()
+	}
+	for i, r := range mr.results {
+		if i > 0 {
+			sw.WriteString(",")
+		}
+		sw.WriteString(r.String())
+	}
+	sw.WriteString("]}")
+	return sw.String()
 }
 
 func (mr multiRoll) Results() []Roll {

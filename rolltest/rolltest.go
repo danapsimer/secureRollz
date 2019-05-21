@@ -1,17 +1,34 @@
-package secureRollz_test
+package rolltest
 
 import (
 	"bytes"
 	"fmt"
+	"github.com/danapsimer/secureRollz"
 	"github.com/montanaflynn/stats"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"math"
-	"secureRollz"
 	"testing"
 )
 
-func testRoller(t *testing.T, roller secureRollz.Roller, numResults int, min, max secureRollz.RollValue, source string) stats.Float64Data {
+func RollerTest(t *testing.T, roller secureRollz.Roller, numResults int, min, max secureRollz.RollValue, source string) stats.Float64Data {
+	return rollerTest(t, roller, numResults, min, max, source, true)
+}
+
+func RollerTestStats(t *testing.T, roller secureRollz.Roller, numResults int, min, max secureRollz.RollValue, mean, stddev float64, source string, printHisto bool) {
+	population := rollerTest(t, roller, numResults, min, max, source, printHisto)
+	m, err := population.Mean()
+	if (assert.NoError(t, err)) {
+		assert.InDelta(t, mean, m, 1.0)
+	}
+	sd, err := population.StandardDeviation()
+	if (assert.NoError(t, err)) {
+		assert.InDelta(t, stddev, sd, 0.1)
+	}
+}
+
+func rollerTest(t *testing.T, roller secureRollz.Roller, numResults int, min, max secureRollz.RollValue, source string, printHisto bool) stats.Float64Data {
+	assert.Equal(t, source, roller.String())
 	samples := int(max-min+1)*1000
 	population := stats.Float64Data(make([]float64,samples))
 	histo := make([]int, max-min+1)
@@ -19,8 +36,8 @@ func testRoller(t *testing.T, roller secureRollz.Roller, numResults int, min, ma
 		for i := 0; i < samples; i++ {
 			roll := roller.Roll()
 			if assert.NotNil(t, roll) {
-				assert.Equal(t, source, roll.Source().String())
-				assert.Equal(t, numResults, len(roll.Results()))
+				results := roll.Results()
+				assert.Equalf(t, numResults, len(results),"expected %d results but found %d: %+v",numResults, len(results), results)
 				total := roll.Total()
 				if assert.Conditionf(t, func() (bool) {
 					return min <= total && total <= max
@@ -31,7 +48,9 @@ func testRoller(t *testing.T, roller secureRollz.Roller, numResults int, min, ma
 			}
 		}
 	}
-	printHistogram(t, min, max, histo, 80)
+	if printHisto {
+		printHistogram(t, min, max, histo, 80)
+	}
 	return population
 }
 
@@ -61,8 +80,7 @@ func printHistogram(t *testing.T, minV, maxV secureRollz.RollValue, histo []int,
 
 var result secureRollz.Roll
 
-
-func rollerBenchmark(b *testing.B, roller secureRollz.Roller) {
+func RollerBenchmark(b *testing.B, roller secureRollz.Roller) {
 	var roll secureRollz.Roll
 	for n := 0; n < b.N; n++ {
 		roll = roller.Roll()
